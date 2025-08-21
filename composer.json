@@ -1,0 +1,21 @@
+{
+    "name": "arkonsoft/ps-module-cqrs",
+    "description": "Custom CQRS for PrestaShop module",
+    "type": "library",
+    "license": "MIT",
+    "minimum-stability": "stable",
+    "require": {
+        "php": ">= 7.0"
+    },
+    "authors": [
+        {
+            "name": "Arkonsoft",
+            "email": "info@arkonsoft.pl"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Arkonsoft\\PsModule\\CQRS\\": ""
+        }
+    }
+}
