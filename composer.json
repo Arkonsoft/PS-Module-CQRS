@@ -5,7 +5,8 @@
     "license": "MIT",
     "minimum-stability": "stable",
     "require": {
-        "php": ">= 7.0"
+        "php": ">= 7.0",
+        "arkonsoft/ps-module-di": "^1"
     },
     "authors": [
         {

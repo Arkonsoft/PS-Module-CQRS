@@ -17,18 +17,23 @@
 
 namespace Arkonsoft\PsModule\CQRS;
 
+use Arkonsoft\PsModule\DI\AutowiringContainerInterface;
+
 if (!defined('_PS_VERSION_')) {
     exit;
 }
 
 class CommandBus
 {
-    private \Module $module;
+    /**
+     * @var AutowiringContainerInterface
+     */
+    private $container;
 
     public function __construct(
-        \Module $module
+        AutowiringContainerInterface $container
     ) {
-        $this->module = $module;
+        $this->container = $container;
     }
 
     public function handle($command)
@@ -39,7 +44,7 @@ class CommandBus
             throw new \RuntimeException("Handler class not found: $handlerClass");
         }
 
-        return $this->module->moduleContainer->get($handlerClass)->handle($command);
+        return $this->container->get($handlerClass)->handle($command);
     }
 
     private function resolveHandlerClass($command)

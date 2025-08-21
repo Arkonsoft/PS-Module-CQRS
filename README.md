@@ -32,22 +32,17 @@ This library provides a simple and efficient way to implement the CQRS pattern i
 
 - PHP >= 7.0
 - PrestaShop >= 1.7.0
+- **Required**: [Arkonsoft PS Module DI](https://packagist.org/packages/arkonsoft/ps-module-di) library
 
-## Recommended Dependencies
 
-This library works best when used together with [Arkonsoft PS Module DI](https://packagist.org/packages/arkonsoft/ps-module-di) for dependency injection:
-
-```bash
-composer require arkonsoft/ps-module-di
-```
-
-The DI container will automatically resolve and inject dependencies into your command and query handlers, making your code cleaner and more maintainable.
 
 ## Installation
 
 ```bash
 composer require arkonsoft/ps-module-cqrs
 ```
+
+The required dependency `arkonsoft/ps-module-di` will be automatically installed.
 
 ## Usage
 
@@ -65,6 +60,7 @@ if (!defined('_PS_VERSION_')) {
 
 use Arkonsoft\PsModule\CQRS\CommandBus;
 use Arkonsoft\PsModule\CQRS\QueryBus;
+use Arkonsoft\PsModule\DI\AutowiringContainer;
 
 require_once __DIR__ . '/vendor/autoload.php';
 
@@ -87,13 +83,41 @@ class MyModule extends Module
         $this->description = $this->l('Module with CQRS implementation');
 
         // Initialize CQRS buses
-        $this->commandBus = new CommandBus($this);
-        $this->queryBus = new QueryBus($this);
+        $container = new AutowiringContainer();
+        $this->commandBus = new CommandBus($container);
+        $this->queryBus = new QueryBus($container);
         
-
+        // Alternative: Get buses from DI container
+        // $this->commandBus = $container->get(CommandBus::class);
+        // $this->queryBus = $container->get(QueryBus::class);
     }
 }
 ```
+
+### Alternative: Using DI Container
+
+You can also get the CQRS buses directly from the DI container:
+
+```php
+<?php
+// Alternative approach - get buses from container
+$container = new AutowiringContainer();
+
+// Register buses in container (optional - AutowiringContainer can auto-resolve)
+$container->set(CommandBus::class, function () use ($container) {
+    return new CommandBus($container);
+});
+
+$container->set(QueryBus::class, function () use ($container) {
+    return new QueryBus($container);
+});
+
+// Get buses from container
+$this->commandBus = $container->get(CommandBus::class);
+$this->queryBus = $container->get(QueryBus::class);
+```
+
+
 
 ### Autoloading Configuration
 
@@ -415,7 +439,7 @@ try {
 - **Maintainability**: Clear structure and naming conventions
 - **Scalability**: Easy to add new commands and queries
 - **PrestaShop Integration**: Designed specifically for PrestaShop modules
-- **Dependency Injection**: Works seamlessly with [Arkonsoft PS Module DI](https://packagist.org/packages/arkonsoft/ps-module-di) for better dependency management
+- **Dependency Injection**: Built on top of [Arkonsoft PS Module DI](https://packagist.org/packages/arkonsoft/ps-module-di) for automatic dependency resolution and injection
 
 ## License
 
