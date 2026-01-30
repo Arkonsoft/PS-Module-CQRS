@@ -64,7 +64,12 @@ final class CommandBusTest extends TestCase
     public function testHandlePropagatesExceptionFromHandler(): void
     {
         $resolveHandler = fn(string $handlerClass): object => new class($handlerClass) {
-            public function __construct(private readonly string $handlerClass) {}
+            private string $handlerClass;
+
+            public function __construct(string $handlerClass)
+            {
+                $this->handlerClass = $handlerClass;
+            }
 
             public function handle(object $command): never
             {

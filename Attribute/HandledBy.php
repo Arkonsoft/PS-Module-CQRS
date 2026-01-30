@@ -24,7 +24,7 @@ if (!defined('_PS_VERSION_')) {
 }
 
 #[Attribute(Attribute::TARGET_CLASS)]
-final readonly class HandledBy
+final class HandledBy
 {
     public function __construct(
         public string $handlerClass

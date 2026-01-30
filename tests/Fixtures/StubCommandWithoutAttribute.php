@@ -2,7 +2,7 @@
 
 namespace Arkonsoft\PsModule\CQRS\Tests\Fixtures;
 
-final readonly class StubCommandWithoutAttribute
+final class StubCommandWithoutAttribute
 {
     public function __construct(public string $value) {}
 }

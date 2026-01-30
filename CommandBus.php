@@ -26,7 +26,7 @@ if (!defined('_PS_VERSION_')) {
 final class CommandBus
 {
     /** @var callable(string): object */
-    private readonly mixed $resolveHandler;
+    private mixed $resolveHandler;
 
     /**
      * @param callable(string): object $resolveHandler Callable that receives handler FQCN and returns handler instance

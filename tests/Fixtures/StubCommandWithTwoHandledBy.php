@@ -6,7 +6,7 @@ use Arkonsoft\PsModule\CQRS\Attribute\HandledBy;
 
 #[HandledBy(StubCommandHandler::class)]
 #[HandledBy(StubCommandHandler::class)]
-final readonly class StubCommandWithTwoHandledBy
+final class StubCommandWithTwoHandledBy
 {
     public function __construct(public string $value) {}
 }
