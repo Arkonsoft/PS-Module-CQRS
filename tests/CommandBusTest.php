@@ -3,6 +3,7 @@
 namespace Arkonsoft\PsModule\CQRS\Tests;
 
 use Arkonsoft\PsModule\CQRS\CommandBus;
+use Arkonsoft\PsModule\CQRS\HandlerInterface;
 use Arkonsoft\PsModule\CQRS\Tests\Fixtures\StubCommandHandler;
 use Arkonsoft\PsModule\CQRS\Tests\Fixtures\StubCommandWithHandler;
 use Arkonsoft\PsModule\CQRS\Tests\Fixtures\StubCommandWithTwoHandledBy;
@@ -61,9 +62,27 @@ final class CommandBusTest extends TestCase
         $bus->handle($command);
     }
 
+    public function testHandleThrowsWhenHandlerDoesNotImplementHandlerInterface(): void
+    {
+        $resolveHandler = fn(string $handlerClass): object => new class() {
+            public function execute(object $command): string
+            {
+                return 'wrong';
+            }
+        };
+        $bus = new CommandBus($resolveHandler);
+        $command = new StubCommandWithHandler('x');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('must implement');
+        $this->expectExceptionMessage(HandlerInterface::class);
+
+        $bus->handle($command);
+    }
+
     public function testHandlePropagatesExceptionFromHandler(): void
     {
-        $resolveHandler = fn(string $handlerClass): object => new class($handlerClass) {
+        $resolveHandler = fn(string $handlerClass): object => new class($handlerClass) implements HandlerInterface {
             private string $handlerClass;
 
             public function __construct(string $handlerClass)

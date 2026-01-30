@@ -2,10 +2,13 @@
 
 namespace Arkonsoft\PsModule\CQRS\Tests\Fixtures;
 
-final class StubCommandHandler
+use Arkonsoft\PsModule\CQRS\HandlerInterface;
+
+final class StubCommandHandler implements HandlerInterface
 {
-    public function handle(StubCommandWithHandler $command): string
+    public function handle(object $command): string
     {
+        assert($command instanceof StubCommandWithHandler);
         return 'handled:' . $command->value;
     }
 }

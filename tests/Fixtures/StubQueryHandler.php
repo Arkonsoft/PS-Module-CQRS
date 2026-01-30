@@ -2,11 +2,14 @@
 
 namespace Arkonsoft\PsModule\CQRS\Tests\Fixtures;
 
-final class StubQueryHandler
+use Arkonsoft\PsModule\CQRS\HandlerInterface;
+
+final class StubQueryHandler implements HandlerInterface
 {
     /** @return array{id: int, result: string} */
-    public function handle(StubQueryWithHandler $query): array
+    public function handle(object $query): array
     {
+        assert($query instanceof StubQueryWithHandler);
         return ['id' => $query->id, 'result' => 'query_ok'];
     }
 }
