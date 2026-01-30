@@ -16,5 +16,5 @@ interface HandlerInterface
      * @param object $message Command or query instance
      * @return mixed Handler result
      */
-    public function handle(object $message): mixed;
+    public function handle($message);
 }

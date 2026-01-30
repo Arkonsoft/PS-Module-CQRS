@@ -90,7 +90,7 @@ final class CommandBusTest extends TestCase
                 $this->handlerClass = $handlerClass;
             }
 
-            public function handle(object $command): never
+            public function handle($command): never
             {
                 throw new \DomainException('Handler failed: ' . $this->handlerClass);
             }
