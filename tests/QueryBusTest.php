@@ -80,7 +80,7 @@ final class QueryBusTest extends TestCase
                 $this->handlerClass = $handlerClass;
             }
 
-            public function handle(object $query): never
+            public function handle($query): never
             {
                 throw new \InvalidArgumentException('Query handler error: ' . $this->handlerClass);
             }
