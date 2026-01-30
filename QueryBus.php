@@ -1,20 +1,5 @@
 <?php
 
-/**
- *  NOTICE OF LICENSE
- *
- * This file is licensed under the Software License Agreement.
- *
- * With the purchase or the installation of the software in your application
- * you accept the license agreement.
- *
- * You must not modify, adapt or create derivative works of this source code
- *
- * @author Arkonsoft
- * @copyright 2026 Arkonsoft
- * @license Commercial - The terms of the license are subject to a proprietary agreement between the author (Arkonsoft) and the licensee
- */
-
 namespace Arkonsoft\PsModule\CQRS;
 
 use Arkonsoft\PsModule\CQRS\Attribute\HandledBy;
@@ -40,6 +25,17 @@ final class QueryBus
     {
         $handlerClass = $this->getHandlerClass($query);
         $handler = ($this->resolveHandler)($handlerClass);
+
+        if (!$handler instanceof HandlerInterface) {
+            throw new \InvalidArgumentException(
+                sprintf(
+                    'Query handler %s must implement %s.',
+                    $handlerClass,
+                    HandlerInterface::class
+                )
+            );
+        }
+
         return $handler->handle($query);
     }
 

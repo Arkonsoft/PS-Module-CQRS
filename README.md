@@ -21,7 +21,7 @@ A lightweight CQRS (Command Query Responsibility Segregation) implementation for
 
 ## Description
 
-This library provides a simple way to implement the CQRS pattern in PrestaShop modules. It includes `CommandBus` and `QueryBus` classes that resolve handlers at runtime by reading the `#[HandledBy(HandlerClass::class)]` attribute from the command or query class. There is no registry, no builder, and no naming convention — you pass a **callable** that creates handler instances (e.g. from your DI container or `new $class()`).
+This library provides a simple way to implement the CQRS pattern in PrestaShop modules. It includes `CommandBus` and `QueryBus` classes that resolve handlers at runtime by reading the `#[HandledBy(HandlerClass::class)]` attribute from the command or query class. Every handler **must implement** `Arkonsoft\PsModule\CQRS\HandlerInterface` (method `handle(object $message): mixed`); otherwise the bus throws. There is no registry, no builder, and no naming convention — you pass a **callable** that creates handler instances (e.g. from your DI container or `new $class()`).
 
 ## Requirements
 
@@ -113,7 +113,7 @@ final readonly class CreateProductCommand
 }
 ```
 
-**Handler** — no attribute; just implement `handle(Command $command)`:
+**Handler** — no attribute; **must implement** `HandlerInterface` and `handle(object $command)`:
 
 ```php
 <?php
@@ -121,12 +121,14 @@ final readonly class CreateProductCommand
 
 namespace MyModule\Application\Handler;
 
+use Arkonsoft\PsModule\CQRS\HandlerInterface;
 use MyModule\Application\Command\CreateProductCommand;
 
-final class CreateProductHandler
+final class CreateProductHandler implements HandlerInterface
 {
-    public function handle(CreateProductCommand $command): int
+    public function handle(object $command): int
     {
+        assert($command instanceof CreateProductCommand);
         $product = new \Product();
         $product->name = $command->name;
         $product->price = $command->price;
@@ -157,7 +159,7 @@ final readonly class GetProductByIdQuery
 }
 ```
 
-**Handler** — no attribute; just implement `handle(Query $query)`:
+**Handler** — no attribute; **must implement** `HandlerInterface` and `handle(object $query)`:
 
 ```php
 <?php
@@ -165,12 +167,14 @@ final readonly class GetProductByIdQuery
 
 namespace MyModule\Application\Handler;
 
+use Arkonsoft\PsModule\CQRS\HandlerInterface;
 use MyModule\Application\Query\GetProductByIdQuery;
 
-final class GetProductByIdHandler
+final class GetProductByIdHandler implements HandlerInterface
 {
-    public function handle(GetProductByIdQuery $query): array
+    public function handle(object $query): array
     {
+        assert($query instanceof GetProductByIdQuery);
         $product = new \Product($query->productId);
         if (!\Validate::isLoadedObject($product)) {
             throw new \RuntimeException('Product not found');
@@ -223,6 +227,7 @@ There is no `HandlerResolverInterface` or resolver class in the library — you 
 ## Error Handling
 
 - If a command or query class does not have exactly one `#[HandledBy(...)]` attribute, the bus throws a `\RuntimeException`.
+- If the resolved handler does not implement `HandlerInterface`, the bus throws an `\InvalidArgumentException`.
 - Any exception thrown by your handler propagates from `handle()`.
 
 ```php
@@ -231,6 +236,9 @@ try {
 } catch (\RuntimeException $e) {
     // Missing or invalid HandledBy attribute, or handler resolution failed
     PrestaShopLogger::addLog('CQRS error: ' . $e->getMessage(), 3);
+} catch (\InvalidArgumentException $e) {
+    // Handler does not implement HandlerInterface
+    PrestaShopLogger::addLog('CQRS handler error: ' . $e->getMessage(), 3);
 } catch (\Exception $e) {
     // Handler execution error
     PrestaShopLogger::addLog('Handler error: ' . $e->getMessage(), 3);
@@ -251,7 +259,7 @@ No registry, builder, or handler list is required.
 
 ## License
 
-Commercial - The terms of the license are subject to a proprietary agreement between the author (Arkonsoft) and the licensee.
+MIT. See the [LICENSE](LICENSE) file for details.
 
 ## Support
 

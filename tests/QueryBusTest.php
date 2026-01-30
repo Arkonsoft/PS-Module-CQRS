@@ -2,6 +2,7 @@
 
 namespace Arkonsoft\PsModule\CQRS\Tests;
 
+use Arkonsoft\PsModule\CQRS\HandlerInterface;
 use Arkonsoft\PsModule\CQRS\QueryBus;
 use Arkonsoft\PsModule\CQRS\Tests\Fixtures\StubQueryHandler;
 use Arkonsoft\PsModule\CQRS\Tests\Fixtures\StubQueryWithHandler;
@@ -50,9 +51,28 @@ final class QueryBusTest extends TestCase
         $bus->handle($query);
     }
 
+    public function testHandleThrowsWhenHandlerDoesNotImplementHandlerInterface(): void
+    {
+        $resolveHandler = fn(string $handlerClass): object => new class() {
+            /** @return array<int, mixed> */
+            public function execute(object $query): array
+            {
+                return [];
+            }
+        };
+        $bus = new QueryBus($resolveHandler);
+        $query = new StubQueryWithHandler(1);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('must implement');
+        $this->expectExceptionMessage(HandlerInterface::class);
+
+        $bus->handle($query);
+    }
+
     public function testHandlePropagatesExceptionFromHandler(): void
     {
-        $resolveHandler = fn(string $handlerClass): object => new class($handlerClass) {
+        $resolveHandler = fn(string $handlerClass): object => new class($handlerClass) implements HandlerInterface {
             private string $handlerClass;
 
             public function __construct(string $handlerClass)
