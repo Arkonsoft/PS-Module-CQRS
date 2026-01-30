@@ -25,7 +25,7 @@ This library provides a simple way to implement the CQRS pattern in PrestaShop m
 
 ## Requirements
 
-- PHP >= 8.0
+- PHP >= 8.1
 - PrestaShop >= 8.0.0
 
 The library does **not** require any specific DI container. You provide a callable that resolves handler class names to instances.
