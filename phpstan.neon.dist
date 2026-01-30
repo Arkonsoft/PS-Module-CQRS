@@ -1,0 +1,14 @@
+includes:
+    - vendor/phpstan/phpstan-phpunit/extension.neon
+
+parameters:
+    level: 6
+    paths:
+        - Attribute
+        - CommandBus.php
+        - QueryBus.php
+        - tests
+    excludePaths:
+        - tests/Fixtures/StubCommandWithTwoHandledBy.php
+    bootstrapFiles:
+        - tests/bootstrap.php

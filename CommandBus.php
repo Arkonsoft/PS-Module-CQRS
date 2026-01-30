@@ -2,75 +2,63 @@
 
 /**
  *  NOTICE OF LICENSE
- * 
+ *
  * This file is licensed under the Software License Agreement.
- * 
+ *
  * With the purchase or the installation of the software in your application
  * you accept the license agreement.
- * 
+ *
  * You must not modify, adapt or create derivative works of this source code
- * 
+ *
  * @author Arkonsoft
- * @copyright 2025 Arkonsoft
+ * @copyright 2026 Arkonsoft
  * @license Commercial - The terms of the license are subject to a proprietary agreement between the author (Arkonsoft) and the licensee
  */
 
 namespace Arkonsoft\PsModule\CQRS;
 
-use Arkonsoft\PsModule\DI\AutowiringContainerInterface;
+use Arkonsoft\PsModule\CQRS\Attribute\HandledBy;
 
 if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-class CommandBus
+final class CommandBus
 {
+    /** @var callable(string): object */
+    private readonly mixed $resolveHandler;
+
     /**
-     * @var AutowiringContainerInterface
+     * @param callable(string): object $resolveHandler Callable that receives handler FQCN and returns handler instance
      */
-    private $container;
-
-    public function __construct(
-        AutowiringContainerInterface $container
-    ) {
-        $this->container = $container;
+    public function __construct(callable $resolveHandler)
+    {
+        $this->resolveHandler = $resolveHandler;
     }
 
-    public function handle($command)
+    public function handle(object $command): mixed
     {
-        $handlerClass = $this->resolveHandlerClass($command);
-
-        if (!class_exists($handlerClass)) {
-            throw new \RuntimeException("Handler class not found: $handlerClass");
-        }
-
-        return $this->container->get($handlerClass)->handle($command);
+        $handlerClass = $this->getHandlerClass($command);
+        $handler = ($this->resolveHandler)($handlerClass);
+        return $handler->handle($command);
     }
 
-    private function resolveHandlerClass($command)
+    private function getHandlerClass(object $command): string
     {
-        $commandClass = get_class($command);
+        $reflection = new \ReflectionClass($command);
+        $attributes = $reflection->getAttributes(HandledBy::class);
 
-        $commandKeyword = 'Command';
-
-        if (substr($commandClass, -strlen($commandKeyword)) !== $commandKeyword) {
-            throw new \InvalidArgumentException("Command class name must end with 'Command'");
+        if (count($attributes) !== 1) {
+            throw new \RuntimeException(
+                sprintf(
+                    'Command %s must have exactly one %s attribute.',
+                    $reflection->getName(),
+                    HandledBy::class
+                )
+            );
         }
 
-        // Replace the namespace segment 'Command' with 'Handler'
-        $handlerClass = str_replace(
-            '\\' . $commandKeyword . '\\',
-            '\\Handler\\',
-            $commandClass
-        );
-
-        // Replace the suffix 'Command' with 'Handler'
-        $handlerClass = preg_replace('/Command$/', 'Handler', $handlerClass);
-
-        if ($handlerClass === null) {
-            throw new \RuntimeException("Failed to resolve handler class for command: $commandClass");
-        }
-
-        return $handlerClass;
+        $handledBy = $attributes[0]->newInstance();
+        return $handledBy->handlerClass;
     }
 }
