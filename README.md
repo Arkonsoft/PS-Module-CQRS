@@ -1,40 +1,34 @@
 # PS Module CQRS
 
-A lightweight CQRS (Command Query Responsibility Segregation) implementation for PrestaShop modules.
+A lightweight CQRS (Command Query Responsibility Segregation) implementation for PrestaShop modules. Uses PHP 8 attributes to bind commands and queries to their handlers — no registry or convention-based resolution.
 
 ## Table of Contents
 
 - [Description](#description)
 - [Requirements](#requirements)
-- [Recommended Dependencies](#recommended-dependencies)
 - [Installation](#installation)
 - [Usage](#usage)
   - [Basic Setup](#basic-setup)
-  - [Creating Commands](#creating-commands)
-  - [Creating Command Handlers](#creating-command-handlers)
-  - [Creating Queries](#creating-queries)
-  - [Creating Query Handlers](#creating-query-handlers)
+  - [The HandledBy Attribute](#the-handledby-attribute)
+  - [Creating Commands and Handlers](#creating-commands-and-handlers)
+  - [Creating Queries and Handlers](#creating-queries-and-handlers)
   - [Using the Buses](#using-the-buses)
-  - [Advanced Example: Order Processing](#advanced-example-order-processing)
-- [Naming Conventions](#naming-conventions)
-  - [Commands](#commands)
-  - [Queries](#queries)
+- [Handler Resolution (callable)](#handler-resolution-callable)
 - [Error Handling](#error-handling)
-- [Benefits](#benefits)
+- [Migration from Convention-Based Binding](#migration-from-convention-based-binding)
 - [License](#license)
 - [Support](#support)
 
 ## Description
 
-This library provides a simple and efficient way to implement the CQRS pattern in PrestaShop modules. It includes `CommandBus` and `QueryBus` classes that automatically resolve and execute command/query handlers based on naming conventions.
+This library provides a simple way to implement the CQRS pattern in PrestaShop modules. It includes `CommandBus` and `QueryBus` classes that resolve handlers at runtime by reading the `#[HandledBy(HandlerClass::class)]` attribute from the command or query class. There is no registry, no builder, and no naming convention — you pass a **callable** that creates handler instances (e.g. from your DI container or `new $class()`).
 
 ## Requirements
 
-- PHP >= 7.0
-- PrestaShop >= 1.7.0
-- **Required**: [Arkonsoft PS Module DI](https://packagist.org/packages/arkonsoft/ps-module-di) library
+- PHP >= 8.1
+- PrestaShop >= 8.0.0
 
-
+The library does **not** require any specific DI container. You provide a callable that resolves handler class names to instances.
 
 ## Installation
 
@@ -42,17 +36,14 @@ This library provides a simple and efficient way to implement the CQRS pattern i
 composer require arkonsoft/ps-module-cqrs
 ```
 
-The required dependency `arkonsoft/ps-module-di` will be automatically installed.
-
 ## Usage
 
 ### Basic Setup
 
-First, include the CQRS classes in your PrestaShop module:
+In your module's main class, create the buses by passing a **callable** that receives the handler class name (string) and returns the handler instance:
 
 ```php
 <?php
-// In your module's main class (e.g., mymodule.php)
 
 if (!defined('_PS_VERSION_')) {
     exit;
@@ -60,87 +51,47 @@ if (!defined('_PS_VERSION_')) {
 
 use Arkonsoft\PsModule\CQRS\CommandBus;
 use Arkonsoft\PsModule\CQRS\QueryBus;
-use Arkonsoft\PsModule\DI\AutowiringContainer;
 
 require_once __DIR__ . '/vendor/autoload.php';
 
 class MyModule extends Module
 {
-    private $commandBus;
-    private $queryBus;
+    private CommandBus $commandBus;
+    private QueryBus $queryBus;
 
     public function __construct()
     {
-        $this->name = 'mymodule';
-        $this->tab = 'administration';
-        $this->version = '1.0.0';
-        $this->author = 'Your Name';
-        $this->need_instance = 0;
+        // ... module setup ...
 
-        parent::__construct();
-
-        $this->displayName = $this->l('My Module');
-        $this->description = $this->l('Module with CQRS implementation');
-
-        // Initialize CQRS buses
-        $container = new AutowiringContainer();
-        $this->commandBus = new CommandBus($container);
-        $this->queryBus = new QueryBus($container);
-        
-        // Alternative: Get buses from DI container
-        // $this->commandBus = $container->get(CommandBus::class);
-        // $this->queryBus = $container->get(QueryBus::class);
+        $resolveHandler = fn(string $handlerClass): object => $this->getContainer()->get($handlerClass);
+        $this->commandBus = new CommandBus($resolveHandler);
+        $this->queryBus = new QueryBus($resolveHandler);
     }
-}
-```
 
-### Alternative: Using DI Container
-
-You can also get the CQRS buses directly from the DI container:
-
-```php
-<?php
-// Alternative approach - get buses from container
-$container = new AutowiringContainer();
-
-// Register buses in container (optional - AutowiringContainer can auto-resolve)
-$container->set(CommandBus::class, function () use ($container) {
-    return new CommandBus($container);
-});
-
-$container->set(QueryBus::class, function () use ($container) {
-    return new QueryBus($container);
-});
-
-// Get buses from container
-$this->commandBus = $container->get(CommandBus::class);
-$this->queryBus = $container->get(QueryBus::class);
-```
-
-
-
-### Autoloading Configuration
-
-If you're using Composer, make sure your `composer.json` includes PSR-4 autoloading for your module:
-
-```json
-{
-    "autoload": {
-        "psr-4": {
-            "MyModule\\": "src/"
+    private function getContainer(): object
+    {
+        // Your DI container (e.g. PSR-11, arkonsoft/ps-module-di, etc.)
+        static $container = null;
+        if ($container === null) {
+            $container = new \Some\Container();
         }
+        return $container;
     }
 }
 ```
 
-Then run:
-```bash
-composer dump-autoload
-```
+### The HandledBy Attribute
 
-### Creating Commands
+Put the **HandledBy** attribute on the **command** or **query** class (not on the handler). It points to the handler class that will process that command or query.
 
-Create command classes that represent actions to be performed:
+- **Command class**: `#[HandledBy(YourCommandHandler::class)]`
+- **Query class**: `#[HandledBy(YourQueryHandler::class)]`
+
+The bus reads this attribute at runtime when you call `handle()`, so there is no registry to build or namespaces to scan.
+
+### Creating Commands and Handlers
+
+**Command** — add the attribute with the handler class:
 
 ```php
 <?php
@@ -148,39 +99,21 @@ Create command classes that represent actions to be performed:
 
 namespace MyModule\Application\Command;
 
-class CreateProductCommand
+use Arkonsoft\PsModule\CQRS\Attribute\HandledBy;
+use MyModule\Application\Handler\CreateProductHandler;
+
+#[HandledBy(CreateProductHandler::class)]
+final readonly class CreateProductCommand
 {
-    private $name;
-    private $price;
-    private $categoryId;
-
-    public function __construct($name, $price, $categoryId)
-    {
-        $this->name = $name;
-        $this->price = $price;
-        $this->categoryId = $categoryId;
-    }
-
-    public function getName()
-    {
-        return $this->name;
-    }
-
-    public function getPrice()
-    {
-        return $this->price;
-    }
-
-    public function getCategoryId()
-    {
-        return $this->categoryId;
-    }
+    public function __construct(
+        public string $name,
+        public float $price,
+        public int $categoryId,
+    ) {}
 }
 ```
 
-### Creating Command Handlers
-
-Create handlers that process the commands:
+**Handler** — no attribute; just implement `handle(Command $command)`:
 
 ```php
 <?php
@@ -190,28 +123,23 @@ namespace MyModule\Application\Handler;
 
 use MyModule\Application\Command\CreateProductCommand;
 
-class CreateProductHandler
+final class CreateProductHandler
 {
-    public function handle(CreateProductCommand $command)
+    public function handle(CreateProductCommand $command): int
     {
-        // Create new product
-        $product = new Product();
-        $product->name = $command->getName();
-        $product->price = $command->getPrice();
-        $product->id_category_default = $command->getCategoryId();
-        
-        if ($product->add()) {
-            return $product->id;
-        }
-        
-        throw new \Exception('Failed to create product');
+        $product = new \Product();
+        $product->name = $command->name;
+        $product->price = $command->price;
+        $product->id_category_default = $command->categoryId;
+        $product->add();
+        return (int) $product->id;
     }
 }
 ```
 
-### Creating Queries
+### Creating Queries and Handlers
 
-Create query classes that represent data retrieval requests:
+**Query** — add the attribute with the handler class:
 
 ```php
 <?php
@@ -219,25 +147,17 @@ Create query classes that represent data retrieval requests:
 
 namespace MyModule\Application\Query;
 
-class GetProductByIdQuery
+use Arkonsoft\PsModule\CQRS\Attribute\HandledBy;
+use MyModule\Application\Handler\GetProductByIdHandler;
+
+#[HandledBy(GetProductByIdHandler::class)]
+final readonly class GetProductByIdQuery
 {
-    private $productId;
-
-    public function __construct($productId)
-    {
-        $this->productId = $productId;
-    }
-
-    public function getProductId()
-    {
-        return $this->productId;
-    }
+    public function __construct(public int $productId) {}
 }
 ```
 
-### Creating Query Handlers
-
-Create handlers that process the queries:
+**Handler** — no attribute; just implement `handle(Query $query)`:
 
 ```php
 <?php
@@ -247,21 +167,18 @@ namespace MyModule\Application\Handler;
 
 use MyModule\Application\Query\GetProductByIdQuery;
 
-class GetProductByIdHandler
+final class GetProductByIdHandler
 {
-    public function handle(GetProductByIdQuery $query)
+    public function handle(GetProductByIdQuery $query): array
     {
-        $product = new Product($query->getProductId());
-        
-        if (!Validate::isLoadedObject($product)) {
-            throw new \Exception('Product not found');
+        $product = new \Product($query->productId);
+        if (!\Validate::isLoadedObject($product)) {
+            throw new \RuntimeException('Product not found');
         }
-        
         return [
             'id' => $product->id,
             'name' => $product->name,
-            'price' => $product->price,
-            'category_id' => $product->id_category_default
+            'price' => (float) $product->price,
         ];
     }
 }
@@ -269,177 +186,68 @@ class GetProductByIdHandler
 
 ### Using the Buses
 
-Now you can use the command and query buses in your module:
-
 ```php
-<?php
-// In your module's controller or hook methods
+// Execute a command
+$command = new \MyModule\Application\Command\CreateProductCommand('New Product', 29.99, 1);
+$productId = $this->commandBus->handle($command);
 
-public function hookActionProductAdd($params)
-{
-    try {
-        // Execute a command
-        $command = new \MyModule\Application\Command\CreateProductCommand(
-            'New Product',
-            29.99,
-            1
-        );
-        
-        $productId = $this->commandBus->handle($command);
-        
-        // Execute a query
-        $query = new \MyModule\Application\Query\GetProductByIdQuery($productId);
-        $productData = $this->queryBus->handle($query);
-        
-        // Log or process the result
-        PrestaShopLogger::addLog(
-            'Product created: ' . json_encode($productData),
-            1
-        );
-        
-    } catch (\Exception $e) {
-        PrestaShopLogger::addLog(
-            'Error in CQRS operation: ' . $e->getMessage(),
-            3
-        );
-    }
-}
+// Execute a query
+$query = new \MyModule\Application\Query\GetProductByIdQuery($productId);
+$productData = $this->queryBus->handle($query);
 ```
 
-### Advanced Example: Order Processing
+## Handler Resolution (callable)
 
-Here's a more complex example showing order processing:
+The constructor of `CommandBus` and `QueryBus` accepts a **callable** with signature `(string $handlerClass): object`. The bus calls it with the handler FQCN (from the `HandledBy` attribute) and uses the returned instance to call `handle($command)` or `handle($query)`.
+
+Examples:
+
+**With a PSR-11 or custom container:**
 
 ```php
-<?php
-// src/Application/Command/ProcessOrderCommand.php
-
-namespace MyModule\Application\Command;
-
-class ProcessOrderCommand
-{
-    private $orderId;
-    private $customerId;
-    private $products;
-
-    public function __construct($orderId, $customerId, array $products)
-    {
-        $this->orderId = $orderId;
-        $this->customerId = $customerId;
-        $this->products = $products;
-    }
-
-    public function getOrderId()
-    {
-        return $this->orderId;
-    }
-
-    public function getCustomerId()
-    {
-        return $this->customerId;
-    }
-
-    public function getProducts()
-    {
-        return $this->products;
-    }
-}
-
-// src/Application/Handler/ProcessOrderHandler.php
-
-namespace MyModule\Application\Handler;
-
-use MyModule\Application\Command\ProcessOrderCommand;
-
-class ProcessOrderHandler
-{
-    public function handle(ProcessOrderCommand $command)
-    {
-        // Validate order
-        $order = new Order($command->getOrderId());
-        if (!Validate::isLoadedObject($order)) {
-            throw new \Exception('Invalid order');
-        }
-
-        // Process payment
-        $paymentResult = $this->processPayment($order);
-        
-        // Update inventory
-        $this->updateInventory($command->getProducts());
-        
-        // Send confirmation email
-        $this->sendConfirmationEmail($order);
-        
-        return [
-            'order_id' => $order->id,
-            'status' => 'processed',
-            'payment_result' => $paymentResult
-        ];
-    }
-
-    private function processPayment($order)
-    {
-        // Payment processing logic
-        return 'success';
-    }
-
-    private function updateInventory($products)
-    {
-        // Inventory update logic
-    }
-
-    private function sendConfirmationEmail($order)
-    {
-        // Email sending logic
-    }
-}
+$resolveHandler = fn(string $handlerClass): object => $container->get($handlerClass);
+$this->commandBus = new CommandBus($resolveHandler);
+$this->queryBus = new QueryBus($resolveHandler);
 ```
 
-## Naming Conventions
+**Simple factory (no DI):**
 
-The library uses the following naming conventions to automatically resolve handlers:
+```php
+$resolveHandler = fn(string $handlerClass): object => new $handlerClass();
+$this->commandBus = new CommandBus($resolveHandler);
+$this->queryBus = new QueryBus($resolveHandler);
+```
 
-### Commands
-- **Command class**: Must end with `Command` (e.g., `CreateProductCommand`)
-- **Handler class**: Must end with `Handler` (e.g., `CreateProductHandler`)
-- **Namespace structure**: 
-  - Commands: `YourNamespace\Application\Command\`
-  - Handlers: `YourNamespace\Application\Handler\`
-
-### Queries
-- **Query class**: Must end with `Query` (e.g., `GetProductByIdQuery`)
-- **Handler class**: Must end with `Handler` (e.g., `GetProductByIdHandler`)
-- **Namespace structure**:
-  - Queries: `YourNamespace\Application\Query\`
-  - Handlers: `YourNamespace\Application\Handler\`
+There is no `HandlerResolverInterface` or resolver class in the library — you pass the callable directly.
 
 ## Error Handling
 
-The library provides comprehensive error handling:
+- If a command or query class does not have exactly one `#[HandledBy(...)]` attribute, the bus throws a `\RuntimeException`.
+- Any exception thrown by your handler propagates from `handle()`.
 
 ```php
 try {
     $result = $this->commandBus->handle($command);
-} catch (\InvalidArgumentException $e) {
-    // Command class name doesn't end with 'Command'
-    PrestaShopLogger::addLog('Invalid command: ' . $e->getMessage(), 3);
 } catch (\RuntimeException $e) {
-    // Handler class not found or failed to resolve
-    PrestaShopLogger::addLog('Handler error: ' . $e->getMessage(), 3);
+    // Missing or invalid HandledBy attribute, or handler resolution failed
+    PrestaShopLogger::addLog('CQRS error: ' . $e->getMessage(), 3);
 } catch (\Exception $e) {
-    // Other errors from handler execution
-    PrestaShopLogger::addLog('Execution error: ' . $e->getMessage(), 3);
+    // Handler execution error
+    PrestaShopLogger::addLog('Handler error: ' . $e->getMessage(), 3);
 }
 ```
 
-## Benefits
+## Migration from Convention-Based Binding
 
-- **Separation of Concerns**: Commands and queries are clearly separated
-- **Testability**: Easy to unit test individual handlers
-- **Maintainability**: Clear structure and naming conventions
-- **Scalability**: Easy to add new commands and queries
-- **PrestaShop Integration**: Designed specifically for PrestaShop modules
-- **Dependency Injection**: Built on top of [Arkonsoft PS Module DI](https://packagist.org/packages/arkonsoft/ps-module-di) for automatic dependency resolution and injection
+If you used an older version that resolved handlers by convention (e.g. `CreateProductCommand` → `CreateProductHandler` in a `Handler` namespace):
+
+1. Add `#[HandledBy(YourHandler::class)]` to each command and query class.
+2. Replace the container in the bus constructor with a **callable**:  
+   `new CommandBus(fn(string $class) => $container->get($class))`  
+   (and the same for `QueryBus`).
+3. Remove any dependency on a specific DI library from this package; your module still uses its own container inside the callable.
+
+No registry, builder, or handler list is required.
 
 ## License
 

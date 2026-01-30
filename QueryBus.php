@@ -1,75 +1,64 @@
 <?php
+
 /**
  *  NOTICE OF LICENSE
- * 
+ *
  * This file is licensed under the Software License Agreement.
- * 
+ *
  * With the purchase or the installation of the software in your application
  * you accept the license agreement.
- * 
+ *
  * You must not modify, adapt or create derivative works of this source code
- * 
+ *
  * @author Arkonsoft
- * @copyright 2025 Arkonsoft
+ * @copyright 2026 Arkonsoft
  * @license Commercial - The terms of the license are subject to a proprietary agreement between the author (Arkonsoft) and the licensee
  */
 
 namespace Arkonsoft\PsModule\CQRS;
 
-use Arkonsoft\PsModule\DI\AutowiringContainerInterface;
+use Arkonsoft\PsModule\CQRS\Attribute\HandledBy;
 
 if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-class QueryBus
+final class QueryBus
 {
+    /** @var callable(string): object */
+    private mixed $resolveHandler;
+
     /**
-     * @var AutowiringContainerInterface
+     * @param callable(string): object $resolveHandler Callable that receives handler FQCN and returns handler instance
      */
-    private $container;
-
-    public function __construct(
-        AutowiringContainerInterface $container
-    ) {
-        $this->container = $container;
+    public function __construct(callable $resolveHandler)
+    {
+        $this->resolveHandler = $resolveHandler;
     }
 
-    public function handle($query)
+    public function handle(object $query): mixed
     {
-        $handlerClass = $this->resolveHandlerClass($query);
-
-        if (!class_exists($handlerClass)) {
-            throw new \RuntimeException("Handler class not found: $handlerClass");
-        }
-
-        return $this->container->get($handlerClass)->handle($query);
+        $handlerClass = $this->getHandlerClass($query);
+        $handler = ($this->resolveHandler)($handlerClass);
+        return $handler->handle($query);
     }
 
-    private function resolveHandlerClass($query)
+    private function getHandlerClass(object $query): string
     {
-        $queryClass = get_class($query);
+        $reflection = new \ReflectionClass($query);
+        $attributes = $reflection->getAttributes(HandledBy::class);
 
-        $queryKeyword = 'Query';
-
-        if (substr($queryClass, -strlen($queryKeyword)) !== $queryKeyword) {
-            throw new \InvalidArgumentException("Query class name must end with 'Query'");
+        if (count($attributes) !== 1) {
+            throw new \RuntimeException(
+                sprintf(
+                    'Query %s must have exactly one %s attribute.',
+                    $reflection->getName(),
+                    HandledBy::class
+                )
+            );
         }
 
-        // Replace the namespace segment 'Query' with 'Handler'
-        $handlerClass = str_replace(
-            '\\' . $queryKeyword . '\\',
-            '\\Handler\\',
-            $queryClass
-        );
-
-        // Replace the suffix 'Query' with 'Handler'
-        $handlerClass = preg_replace('/Query$/', 'Handler', $handlerClass);
-
-        if ($handlerClass === null) {
-            throw new \RuntimeException("Failed to resolve handler class for query: $queryClass");
-        }
-
-        return $handlerClass;
+        $handledBy = $attributes[0]->newInstance();
+        return $handledBy->handlerClass;
     }
 }
